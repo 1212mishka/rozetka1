@@ -1,9 +1,8 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { HapticTab } from '@/components/haptic-tab';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 export default function TabLayout() {
   return (
@@ -16,42 +15,14 @@ export default function TabLayout() {
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabLabel,
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Головна',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="home" size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="catalog"
-        options={{
-          title: 'Каталог',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="grid-outline" size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="wishlist"
-        options={{
-          title: 'Списки',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="heart-outline" size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Ще',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="person-outline" size={24} color={color} />
-          ),
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: 'Головна', tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} /> }} />
+      <Tabs.Screen name="catalog" options={{ title: 'Каталог', tabBarIcon: ({ color }) => <Ionicons name="grid-outline" size={24} color={color} /> }} />
+      <Tabs.Screen name="wishlist" options={{ title: 'Списки', tabBarIcon: ({ color }) => <Ionicons name="heart-outline" size={24} color={color} /> }} />
+      <Tabs.Screen name="profile" options={{ title: 'Ще', tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={color} /> }} />
+      <Tabs.Screen name="register" options={{ href: null }} />
+      <Tabs.Screen name="login" options={{ href: null }} />
+      <Tabs.Screen name="cart" options={{ href: null }} />
+      <Tabs.Screen name="ProductDetailScreen" options={{ href: null }} />
     </Tabs>
   );
 }

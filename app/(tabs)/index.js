@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { createPhonesTable, getPhones, migratePhonesTable } from '../../db/phones';
 import { seedPhones } from '../../db/phones-seed';
 import { createLaptopsTable, getLaptops, migrateLaptopsTable, removeDuplicateLaptops } from '../../db/laptops';
 import { seedLaptops } from '../../db/laptops-seed';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_700Bold } from '@expo-google-fonts/montserrat';
+
 const images = {
   'phone0.png': require('../../assets/images/phone0.png'),
   'phone1.png': require('../../assets/images/phone1.png'),
@@ -25,6 +27,7 @@ export default function HomeScreen() {
   });
   const [phones, setPhones] = useState([]);
   const [laptops, setLaptops] = useState([]);
+  const router = useRouter();
 
   useEffect(() => {
     if (!fontsLoaded) return;
@@ -52,9 +55,9 @@ export default function HomeScreen() {
         <Image source={require('../../assets/images/logo.png')} style={styles.logoLarge} resizeMode="contain" />
         <View style={styles.headerRow}>
           <View style={{flex:1}} />
-          <TouchableOpacity style={styles.cartBtn}>
+          <TouchableOpacity style={styles.cartBtn} onPress={() => router.push('/(tabs)/cart')}>
             <Ionicons name="cart-outline" size={28} color="#fff" />
-            <View style={styles.cartBadge}><Text style={styles.cartBadgeText}>2</Text></View>
+            <View style={styles.cartBadge}><Text style={styles.cartBadgeText}>0</Text></View>
           </TouchableOpacity>
         </View>
         <TextInput
@@ -74,7 +77,12 @@ export default function HomeScreen() {
         <Text style={styles.sectionTitle}>Акційні пропозиції</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
           {phones.map((phone, idx) => (
-            <View key={phone.id || idx} style={styles.offerCard}>
+            <TouchableOpacity
+              key={phone.id || idx}
+              style={styles.offerCard}
+              activeOpacity={0.8}
+              onPress={() => router.push({ pathname: '/(tabs)/ProductDetailScreen', params: { id: phone.id, type: 'phone' } })}
+            >
               <Image
                 source={images[phone.image] || images['phone0.png']}
                 style={styles.offerImg}
@@ -85,7 +93,7 @@ export default function HomeScreen() {
                 <Text style={styles.oldPrice}>{phone.old_price} ₴</Text>
               )}
               <Text style={styles.newPrice}>{phone.price} ₴</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
 
@@ -93,7 +101,12 @@ export default function HomeScreen() {
         <Text style={styles.sectionTitle}>Зараз шукають</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
           {phones.map((phone, idx) => (
-            <View key={"search-" + (phone.id || idx)} style={styles.offerCard}>
+            <TouchableOpacity
+              key={"search-" + (phone.id || idx)}
+              style={styles.offerCard}
+              activeOpacity={0.8}
+              onPress={() => router.push({ pathname: '/(tabs)/ProductDetailScreen', params: { id: phone.id, type: 'phone' } })}
+            >
               <Image
                 source={images[phone.image] || images['phone0.png']}
                 style={styles.offerImg}
@@ -104,7 +117,7 @@ export default function HomeScreen() {
                 <Text style={styles.oldPrice}>{phone.old_price} ₴</Text>
               )}
               <Text style={styles.newPrice}>{phone.price} ₴</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
 
@@ -119,7 +132,12 @@ export default function HomeScreen() {
             .sort((a, b) => b.id - a.id)
             .slice(0, 6)
             .map((item, idx) => (
-              <View key={item.type + '-' + (item.id || idx)} style={styles.gridCard}>
+              <TouchableOpacity
+                key={item.type + '-' + (item.id || idx)}
+                style={styles.gridCard}
+                activeOpacity={0.8}
+                onPress={() => router.push({ pathname: '/(tabs)/ProductDetailScreen', params: { id: item.id, type: item.type } })}
+              >
                 <TouchableOpacity style={styles.wishlistBtn}>
                   <Ionicons name="heart-outline" size={20} color="#ccc" />
                 </TouchableOpacity>
@@ -133,7 +151,7 @@ export default function HomeScreen() {
                   <Text style={styles.oldPrice}>{item.old_price} ₴</Text>
                 )}
                 <Text style={styles.newPrice}>{item.price} ₴</Text>
-              </View>
+              </TouchableOpacity>
             ))}
         </View>
 
