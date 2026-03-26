@@ -1,8 +1,7 @@
 import * as SQLite from 'expo-sqlite';
- 
+
 const db = SQLite.openDatabaseSync('phones.db');
- 
-// Создаём таблицу корзины (связь user -> много товаров)
+
 export function createCartTable() {
   db.execSync(`
     CREATE TABLE IF NOT EXISTS cart (
@@ -19,18 +18,23 @@ export function createCartTable() {
     );
   `);
 }
- 
-// Добавить товар в корзину (если уже есть — увеличить quantity)
+
 export function addToCart(userId, product, productType = 'phone') {
+  if (!userId) {
+    console.error('addToCart: userId is undefined!');
+    return { success: false, error: 'Користувач не авторизований' };
+  }
   try {
     const existing = db.getAllSync(
       'SELECT * FROM cart WHERE user_id = ? AND product_id = ? AND product_type = ?',
       [userId, product.id, productType]
     );
     if (existing.length > 0) {
-      db.execSync(
-        `UPDATE cart SET quantity = quantity + 1 WHERE user_id = ${userId} AND product_id = ${product.id} AND product_type = '${productType}'`
+      const stmt = db.prepareSync(
+        'UPDATE cart SET quantity = quantity + 1 WHERE user_id = ? AND product_id = ? AND product_type = ?'
       );
+      stmt.executeSync([userId, product.id, productType]);
+      stmt.finalizeSync();
     } else {
       const stmt = db.prepareSync(
         'INSERT INTO cart (user_id, product_id, product_type, name, price, image) VALUES (?, ?, ?, ?, ?, ?)'
@@ -44,40 +48,46 @@ export function addToCart(userId, product, productType = 'phone') {
     return { success: false, error: e.message };
   }
 }
- 
-// Получить корзину пользователя
+
 export function getCartItems(userId) {
+  if (!userId) {
+    console.warn('getCartItems: userId is undefined, returning []');
+    return [];
+  }
   return db.getAllSync(
     'SELECT * FROM cart WHERE user_id = ? ORDER BY id DESC',
     [userId]
   );
 }
- 
-// Изменить количество
+
 export function updateCartQuantity(cartItemId, quantity) {
   if (quantity <= 0) {
     removeFromCart(cartItemId);
     return;
   }
-  db.execSync(`UPDATE cart SET quantity = ${quantity} WHERE id = ${cartItemId}`);
+  const stmt = db.prepareSync('UPDATE cart SET quantity = ? WHERE id = ?');
+  stmt.executeSync([quantity, cartItemId]);
+  stmt.finalizeSync();
 }
- 
-// Удалить товар из корзины
+
 export function removeFromCart(cartItemId) {
-  db.execSync(`DELETE FROM cart WHERE id = ${cartItemId}`);
+  const stmt = db.prepareSync('DELETE FROM cart WHERE id = ?');
+  stmt.executeSync([cartItemId]);
+  stmt.finalizeSync();
 }
- 
-// Очистить корзину пользователя
+
 export function clearCart(userId) {
-  db.execSync(`DELETE FROM cart WHERE user_id = ${userId}`);
+  if (!userId) return;
+  const stmt = db.prepareSync('DELETE FROM cart WHERE user_id = ?');
+  stmt.executeSync([userId]);
+  stmt.finalizeSync();
 }
- 
-// Количество товаров в корзине (для бейджа)
+
 export function getCartCount(userId) {
+  if (!userId) return 0;
   const result = db.getAllSync(
     'SELECT SUM(quantity) as total FROM cart WHERE user_id = ?',
     [userId]
   );
   return result[0]?.total || 0;
 }
- 
