@@ -5,8 +5,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { createUsersTable, loginUser } from '../../db/users';
 import { useAuth } from '../../context/AuthContext';
+import { login as loginApi } from '../../api';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_700Bold } from '@expo-google-fonts/montserrat';
 
 export default function LoginScreen() {
@@ -24,17 +24,18 @@ export default function LoginScreen() {
 
   if (!fontsLoaded) return null;
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Помилка', 'Заповніть всі поля');
       return;
     }
-    createUsersTable();
-    const result = loginUser(email, password);
-    if (result.success) {
-      login(result.user); // ← сохраняем пользователя в контекст
-    } else {
-      Alert.alert('Помилка', result.error);
+    try {
+      const response = await loginApi({ email, password });
+      const { accessToken, userId } = response.data;
+      global.accessToken = accessToken;
+      login({ id: userId, email });
+    } catch (error) {
+      Alert.alert('Помилка', 'Невірний email або пароль');
     }
   };
 

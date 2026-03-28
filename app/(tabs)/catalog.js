@@ -1,35 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Image, ScrollView,
-  TouchableOpacity, TextInput
+  TouchableOpacity, TextInput, ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_700Bold, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
-import { createCategoriesTable, getCategories } from '../../db/categories';
-import { seedCategories } from '../../db/categories-seed';
+import { getCategories } from '../../api';
 
-const categoryImages = {
-  'cimage1.png': require('../../assets/images/cimage1.png'),
-  'cimage2.png': require('../../assets/images/cimage2.png'),
-  'cimage3.png': require('../../assets/images/cimage3.png'),
-  'cimage4.png': require('../../assets/images/cimage4.png'),
-  'cimage5.png': require('../../assets/images/cimage5.png'),
-  'cimage6.png': require('../../assets/images/cimage6.png'),
-  'cimage7.png': require('../../assets/images/cimage7.png'),
-  'cimage8.png': require('../../assets/images/cimage8.png'),
-  'cimage9.png': require('../../assets/images/cimage9.png'),
-  'cimage10.png': require('../../assets/images/cimage10.png'),
-  'cimage11.png': require('../../assets/images/cimage11.png'),
-  'cimage12.png': require('../../assets/images/cimage12.png'),
-  'cimage13.png': require('../../assets/images/cimage13.png'),
-  'cimage14.png': require('../../assets/images/cimage14.png'),
-  'cimage15.png': require('../../assets/images/cimage15.png'),
-  'cimage16.png': require('../../assets/images/cimage16.png'),
+const categoryImageMap = {
+  'Ноутбуки та комп\'ютери': require('../../assets/images/cimage1.png'),
+  'Смартфони, ТВ і електроніка': require('../../assets/images/cimage2.png'),
+  'Товари для геймерів': require('../../assets/images/cimage3.png'),
+  'Побутова техніка': require('../../assets/images/cimage4.png'),
+  'Товари для дому': require('../../assets/images/cimage5.png'),
+  'Інструменти та автотовари': require('../../assets/images/cimage6.png'),
+  'Сантехніка та ремонт': require('../../assets/images/cimage7.png'),
+  'Дача, сад і огород': require('../../assets/images/cimage8.png'),
+  'Спорт і захоплення': require('../../assets/images/cimage9.png'),
+  'Одяг, взуття та прикраси': require('../../assets/images/cimage10.png'),
+  'Краса та здоров\'я': require('../../assets/images/cimage11.png'),
+  'Дитячі товари': require('../../assets/images/cimage12.png'),
+  'Зоотовари': require('../../assets/images/cimage13.png'),
+  'Канцтовари та книги': require('../../assets/images/cimage14.png'),
+  'Алкогольні напої та продукти': require('../../assets/images/cimage15.png'),
+  'Товари для бізнесу та послуги': require('../../assets/images/cimage16.png'),
+  'Смартфони': require('../../assets/images/cimage2.png'),
+  'Ноутбуки': require('../../assets/images/cimage1.png'),
 };
 
+const fallbackImage = require('../../assets/images/cimage1.png');
+
 export default function CatalogScreen() {
+  const router = useRouter();
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const [fontsLoaded] = useFonts({
     Montserrat_400Regular,
@@ -40,19 +46,23 @@ export default function CatalogScreen() {
 
   useEffect(() => {
     if (!fontsLoaded) return;
-    try {
-      createCategoriesTable();
-      seedCategories();
-      setCategories(getCategories());
-    } catch (e) {
-      console.error('Ошибка категорий:', e);
-    }
+    const load = async () => {
+      try {
+        const response = await getCategories();
+        setCategories(response.data);
+      } catch (e) {
+        console.error('Ошибка категорий:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, [fontsLoaded]);
 
   if (!fontsLoaded) return null;
 
   const filtered = categories.filter(c =>
-    c.label.toLowerCase().includes(search.toLowerCase())
+    c.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const rows = [];
@@ -62,118 +72,106 @@ export default function CatalogScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Шапка */}
-    <View style={styles.header}>
-  <View style={styles.headerRow}>
-    <View style={{flex: 1}} />
-    <Text style={styles.headerTitle}>Каталог</Text>
-    <View style={{flex: 1, alignItems: 'flex-end'}}>
-      <TouchableOpacity style={styles.cartBtn}>
-        <Ionicons name="cart-outline" size={28} color="#fff" />
-        <View style={styles.cartBadge}>
-          <Text style={styles.cartBadgeText}></Text>
-        </View>
-      </TouchableOpacity>
-    </View>
-  </View>
-  <View style={styles.searchContainer}>
-    <Ionicons name="search-outline" size={18} color="#aaa" style={{marginRight: 8}} />
-    <TextInput
-      style={styles.search}
-      placeholder="Я шукаю..."
-      placeholderTextColor="#aaa"
-      value={search}
-      onChangeText={setSearch}
-    />
-  </View>
-</View>
-
-      <ScrollView contentContainerStyle={{padding: 12, paddingBottom: 32}}>
-        {rows.map((row, rowIdx) => (
-          <View key={rowIdx} style={styles.row}>
-            {row.map((cat) => (
-              <TouchableOpacity key={cat.id} style={styles.card}>
-                <Image
-                  source={categoryImages[cat.image] || categoryImages['cimage1.png']}
-                  style={styles.catImg}
-                  resizeMode="contain"
-                />
-                <Text style={styles.catLabel}>{cat.label}</Text>
-              </TouchableOpacity>
-            ))}
-            {row.length === 1 && <View style={[styles.card, {backgroundColor: 'transparent', elevation: 0, shadowOpacity: 0}]} />}
+      <View style={styles.header}>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }} />
+          <Text style={styles.headerTitle}>Каталог</Text>
+          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+            <TouchableOpacity style={styles.cartBtn} onPress={() => router.push('/(tabs)/cart')}>
+              <Ionicons name="cart-outline" size={26} color="#fff" />
+            </TouchableOpacity>
           </View>
-        ))}
-
-        {/* Premium баннер */}
-        <TouchableOpacity style={styles.premiumBanner}>
-          <Image
-            source={require('../../assets/images/button.png')}
-            style={styles.premiumImg}
-            resizeMode="cover"
+        </View>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search-outline" size={16} color="#aaa" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.search}
+            placeholder="Я шукаю..."
+            placeholderTextColor="#aaa"
+            value={search}
+            onChangeText={setSearch}
           />
-        </TouchableOpacity>
-      </ScrollView>
+        </View>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#00133d" style={{ marginTop: 40 }} />
+      ) : (
+        <ScrollView contentContainerStyle={styles.listContent}>
+          {rows.map((row, rowIdx) => (
+            <View key={rowIdx} style={styles.row}>
+              {row.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={styles.card}
+                  activeOpacity={0.75}
+                  onPress={() => router.push({ pathname: '/(tabs)/category', params: { categoryId: cat.id, categoryName: cat.name } })}
+                >
+                  <Image
+                    source={categoryImageMap[cat.name] ?? fallbackImage}
+                    style={styles.catImg}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.catLabel} numberOfLines={2}>{cat.name}</Text>
+                </TouchableOpacity>
+              ))}
+              {row.length === 1 && <View style={[styles.card, styles.emptyCard]} />}
+            </View>
+          ))}
+
+          <TouchableOpacity style={styles.premiumBanner} activeOpacity={0.85}>
+            <View style={styles.premiumContent}>
+              <Ionicons name="star" size={20} color="#00133d" style={{ marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.premiumTitle}>PREMIUM</Text>
+                <Text style={styles.premiumSub}>Безкоштовна доставка з підпискою Premium</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#00133d" />
+            </View>
+          </TouchableOpacity>
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: {
     backgroundColor: '#00133d',
-    paddingTop: 39,
+    paddingTop: 52,
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 14,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   headerTitle: {
     fontFamily: 'Montserrat_600SemiBold',
     fontSize: 18,
     color: '#fff',
     textAlign: 'center',
-    marginBottom: 4,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  cartBtn: {
-    position: 'relative',
-    padding: 6,
-  },
-  cartBadge: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    backgroundColor: '#a3ff00',
-    borderRadius: 10,
-    width: 18,
-    height: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cartBadgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#00133d',
-  },
+  cartBtn: { padding: 4 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 25,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     height: 40,
   },
   search: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Montserrat_400Regular',
     color: '#000',
+  },
+  listContent: {
+    padding: 12,
+    paddingBottom: 32,
   },
   row: {
     flexDirection: 'row',
@@ -185,33 +183,51 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 12,
-    alignItems: 'flex-start',
     flexDirection: 'row',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
+  emptyCard: {
+    backgroundColor: 'transparent',
+    elevation: 0,
+    shadowOpacity: 0,
+  },
   catImg: {
-    width: 60,
-    height: 60,
-    marginRight: 8,
+    width: 52,
+    height: 52,
+    marginRight: 10,
+    flexShrink: 0,
   },
   catLabel: {
     flex: 1,
     fontFamily: 'Montserrat_400Regular',
     fontSize: 12,
     color: '#222',
-    alignSelf: 'center',
+    lineHeight: 17,
   },
   premiumBanner: {
-    marginTop: 8,
-    overflow: 'hidden',
-    marginHorizontal: -12,
+    backgroundColor: '#f5c518',
+    borderRadius: 12,
+    marginTop: 4,
+    padding: 14,
   },
-  premiumImg: {
-    width: '100%',
-    height: 65,
+  premiumContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  premiumTitle: {
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 13,
+    color: '#00133d',
+  },
+  premiumSub: {
+    fontFamily: 'Montserrat_400Regular',
+    fontSize: 11,
+    color: '#00133d',
+    marginTop: 1,
   },
 });
