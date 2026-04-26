@@ -1,26 +1,22 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// Подключаем необходимые инструменты из React:
+// createContext — создаёт "контейнер" для данных, доступный всему приложению
+// useContext   — позволяет "достать" эти данные в любом компоненте
+// useState     — хранит переменные внутри компонента (с возможностью обновления)
+// useEffect    — выполняет код после того, как компонент отрендерился (например, при запуске)
+import React, { createContext, useContext, useState } from 'react';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading] = useState(false);
 
-  useEffect(() => {
-    AsyncStorage.getItem('user').then(data => {
-      if (data) setUser(JSON.parse(data));
-      setLoading(false);
-    });
-  }, []);
-
-  const login = async (userData) => {
-    await AsyncStorage.setItem('user', JSON.stringify(userData));
+  const login = (userData) => {
     setUser(userData);
   };
 
-  const logout = async () => {
-    await AsyncStorage.removeItem('user');
+  const logout = () => {
+    global.accessToken = null;
     setUser(null);
   };
 

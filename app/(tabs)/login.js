@@ -1,51 +1,82 @@
+
 import React, { useState } from 'react';
+
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Image, ScrollView, Alert
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+  ScrollView,
+  Alert
 } from 'react-native';
+
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { login as loginApi } from '../../api';
+import { login as loginApi, getProfile, adminGetSellers, getSellerMe } from '../../services/api';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_700Bold } from '@expo-google-fonts/montserrat';
-
 export default function LoginScreen() {
   const router = useRouter();
+
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-
   const [fontsLoaded] = useFonts({
     Montserrat_400Regular,
     Montserrat_500Medium,
     Montserrat_700Bold,
   });
-
   if (!fontsLoaded) return null;
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Помилка', 'Заповніть всі поля');
+      Alert.alert('Ошибка', 'Заполните все поля');
       return;
     }
     try {
       const response = await loginApi({ email, password });
       const { accessToken, userId } = response.data;
       global.accessToken = accessToken;
-      login({ id: userId, email });
+
+      let name = email;
+      try {
+        const profile = await getProfile();
+        const p = profile.data;
+        name = [p.firstName, p.lastName].filter(Boolean).join(' ') || p.name || p.username || email;
+      } catch {}
+
+      // Определяем роль через реальные запросы к защищённым эндпоинтам
+      let role = 'Customer';
+      try {
+        await adminGetSellers();
+        role = 'Admin';
+      } catch {
+        try {
+          await getSellerMe();
+          role = 'Seller';
+        } catch (e) {
+          // 404 = has Seller role but no profile yet
+          if (e?.response?.status === 404) role = 'Seller';
+        }
+      }
+
+      login({ id: userId, email, name, role });
     } catch (error) {
-      Alert.alert('Помилка', 'Невірний email або пароль');
+      Alert.alert('Ошибка', 'Неверный email или пароль');
     }
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+
       <View style={styles.header}>
         <Image source={require('../../assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
       </View>
 
-      <Text style={styles.title}>Вхід</Text>
+      <Text style={styles.title}>Вход</Text>
 
       <TextInput
         style={styles.input}
@@ -71,7 +102,7 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.orText}>Увійти як користувач</Text>
+      <Text style={styles.orText}>Войти как пользователь</Text>
 
       <TouchableOpacity style={styles.socialBtn}>
         <Ionicons name="logo-facebook" size={20} color="#1877F2" style={{marginRight: 8}} />
@@ -87,16 +118,16 @@ export default function LoginScreen() {
       </TouchableOpacity>
 
       <Text style={styles.terms}>
-        Реєструючись, ви погоджуєтесь з{' '}
-        <Text style={styles.termsLink}>угодою користувача</Text>
+        Регистрируясь, вы соглашаетесь с{' '}
+        <Text style={styles.termsLink}>пользовательским соглашением</Text>
       </Text>
 
       <TouchableOpacity style={styles.btn} onPress={handleLogin}>
-        <Text style={styles.btnText}>Увійти</Text>
+        <Text style={styles.btnText}>Войти</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.replace('/(tabs)/register')}>
-        <Text style={styles.link}>Немає акаунту? Зареєструватись</Text>
+        <Text style={styles.link}>Нет аккаунта? Зарегистрироваться</Text>
       </TouchableOpacity>
     </ScrollView>
   );

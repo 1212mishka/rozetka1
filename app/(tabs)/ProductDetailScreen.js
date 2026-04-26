@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+
+
 import {
   View, Text, StyleSheet, Image, ScrollView,
   TouchableOpacity, Dimensions, Animated, Alert, ActivityIndicator
@@ -6,65 +8,15 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_700Bold } from '@expo-google-fonts/montserrat';
-import { getProduct, getProductOffers, addToFavorites, removeFromFavorites } from '../../api';
+import { getProduct, getProductOffers, getProductAttributes, addToFavorites, removeFromFavorites, addToCart as apiAddToCart } from '../../services/api';
+import { addToCart as sqlAddToCart, createCartTable } from '../../db/cart';
 import { useAuth } from '../../context/AuthContext';
-import { addToCart, createCartTable } from '../../db/cart';
-
+import { getProductImage, getProductImageFile } from '../../utils/productImages';
 const { width } = Dimensions.get('window');
-
-const namedImages = {
-  'Apple iPhone 13': require('../../assets/images/phone0.png'),
-  'Samsung Galaxy S23': require('../../assets/images/phone1.png'),
-  'Xiaomi Redmi Note 12': require('../../assets/images/phone2.png'),
-  'Realme 11 Pro': require('../../assets/images/phone3.png'),
-  'Google Pixel 7a': require('../../assets/images/phone4.png'),
-  'OnePlus Nord CE 3': require('../../assets/images/phone5.png'),
-  'Apple MacBook Air M2': require('../../assets/images/laptop0.png'),
-  'ASUS ZenBook 14': require('../../assets/images/laptop1.png'),
-};
-
-const laptopPool = [
-  require('../../assets/images/laptop0.png'),
-  require('../../assets/images/laptop1.png'),
-];
-const phonePool = [
-  require('../../assets/images/phone0.png'),
-  require('../../assets/images/phone1.png'),
-  require('../../assets/images/phone2.png'),
-  require('../../assets/images/phone3.png'),
-  require('../../assets/images/phone4.png'),
-  require('../../assets/images/phone5.png'),
-];
-
-const isLaptopName = (name = '') => {
-  const l = name.toLowerCase();
-  return l.includes('ноутбук') || l.includes('macbook') || l.includes('laptop') ||
-    l.includes('zenbook') || l.includes('thinkpad') || l.includes('vivobook') ||
-    l.includes('probook') || l.includes('elitebook') || l.includes('swift');
-};
-
-const isPhoneName = (name = '') => {
-  const l = name.toLowerCase();
-  return l.includes('iphone') || l.includes('samsung') || l.includes('xiaomi') ||
-    l.includes('realme') || l.includes('pixel') || l.includes('oneplus') ||
-    l.includes('смартфон') || l.includes('phone');
-};
-const getProductImage = (name = '') => {
-  if (namedImages[name]) return namedImages[name];
-  if (isLaptopName(name)) return laptopPool[name.length % laptopPool.length];
-  if (isPhoneName(name)) return phonePool[name.length % phonePool.length];
-  return null;
-};
-
-const getProductImageFile = (name = '') => {
-  const laptopFiles = ['laptop0.png', 'laptop1.png'];
-  const phoneFiles = ['phone0.png', 'phone1.png', 'phone2.png', 'phone3.png', 'phone4.png', 'phone5.png'];
-  const pool = isLaptopName(name) ? laptopFiles : phoneFiles;
-  return pool[name.length % pool.length];
-};
 
 function AccordionSection({ title, badge, children }) {
   const [open, setOpen] = useState(false);
+
   return (
     <View style={acc.wrapper}>
       <TouchableOpacity style={acc.row} onPress={() => setOpen(v => !v)} activeOpacity={0.7}>
@@ -84,6 +36,7 @@ export default function ProductDetailScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [item, setItem] = useState(null);
+  const [attributes, setAttributes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -96,50 +49,72 @@ export default function ProductDetailScreen() {
 
   useEffect(() => {
     if (!fontsLoaded) return;
+
     const load = async () => {
       try {
-        const [productRes, offersRes] = await Promise.all([
+        // 1) getProduct — основные данные товара
+        // 2) getProductOffers — предложения (цена, наличие)
+        // 3) getProductAttributes — характеристики товара
+        const [productRes, offersRes, attrsRes] = await Promise.all([
           getProduct(id),
           getProductOffers(id),
+          getProductAttributes(id),
         ]);
+
         const product = productRes.data;
         const offer = Array.isArray(offersRes.data) ? offersRes.data[0] : offersRes.data;
         setItem({ ...product, offer });
         setIsFavorite(offer?.isFavorite ?? false);
+
+        const attrs = attrsRes.data;
+        setAttributes(Array.isArray(attrs) ? attrs : attrs?.attributes ?? attrs?.items ?? []);
       } catch (e) {
-        console.error('Помилка завантаження товару:', e);
+        console.error('Ошибка загрузки товара:', e);
       } finally {
         setLoading(false);
       }
     };
+
     load();
   }, [fontsLoaded, id]);
 
   useEffect(() => {
     if (item) {
+
       Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
     }
   }, [item]);
 
-  const handleAddToCart = () => {
-    if (!user) {
-      router.push('/(tabs)/login');
-      return;
-    }
-    createCartTable();
-    const result = addToCart(user.id, {
-      id: item.id,
-      name: item.name,
-      price: item.offer?.priceAmount,
-      image: getProductImageFile(item.name),
-    }, 'api');
-    if (result.success) {
-      Alert.alert('Додано!', `"${item.name}" додано до кошика.`, [
-        { text: 'OK', style: 'cancel' },
-        { text: 'Перейти до кошика', onPress: () => router.push('/(tabs)/cart') },
-      ]);
-    }
-  };
+  const handleAddToCart = async () => {
+  if (!user) {
+    router.push('/(tabs)/login');
+    return;
+  }
+  createCartTable();
+  const offerId = item.offer?.offerId;
+
+  // лог тут — после объявления offerId
+  if (offerId) {
+    apiAddToCart({ offerId, quantity: 1 })
+      .then(r => console.log('API CART OK:', JSON.stringify(r.data)))
+      .catch(e => console.log('API CART ERROR:', e?.response?.status, JSON.stringify(e?.response?.data)));
+  } else {
+    console.log('offerId is undefined, offer:', JSON.stringify(item.offer));
+  }
+
+  sqlAddToCart(user.id, {
+    id: item.id,
+    name: item.name,
+    price: item.offer?.priceAmount,
+    image: getProductImageFile(item.name),
+    offerId,
+  }, 'api');
+
+  Alert.alert('Добавлено!', `"${item.name}" добавлено в корзину.`, [
+    { text: 'OK', style: 'cancel' },
+    { text: 'Перейти в корзину', onPress: () => router.push('/(tabs)/cart') },
+  ]);
+};
 
   const toggleFavorite = async () => {
     if (!user) {
@@ -155,7 +130,7 @@ export default function ProductDetailScreen() {
         setIsFavorite(true);
       }
     } catch (e) {
-      console.error('Помилка вішліст:', e);
+      console.error('Ошибка вишлиста:', e);
     }
   };
 
@@ -170,7 +145,7 @@ export default function ProductDetailScreen() {
   if (!item) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <Text style={{ fontFamily: 'Montserrat_400Regular', color: '#888' }}>Товар не знайдено.</Text>
+        <Text style={{ fontFamily: 'Montserrat_400Regular', color: '#888' }}>Товар не найден.</Text>
       </View>
     );
   }
@@ -180,6 +155,7 @@ export default function ProductDetailScreen() {
 
   return (
     <Animated.View style={{ flex: 1, backgroundColor: '#fff', opacity: fadeAnim }}>
+
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -196,13 +172,14 @@ export default function ProductDetailScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
+
         <View style={s.imgBlock}>
           {imgSource ? (
             <Image source={imgSource} style={s.mainImg} resizeMode="contain" />
           ) : (
             <View style={s.noPhoto}>
               <Ionicons name="image-outline" size={64} color="#ccc" />
-              <Text style={s.noPhotoText}>Фото відсутнє</Text>
+              <Text style={s.noPhotoText}>Фото отсутствует</Text>
             </View>
           )}
           <View style={s.dots}><View style={[s.dot, s.dotActive]} /></View>
@@ -210,18 +187,21 @@ export default function ProductDetailScreen() {
 
         <View style={s.infoBlock}>
           <Text style={s.productName}>{item.name}</Text>
+
           <View style={s.ratingRow}>
             {[1,2,3,4,5].map(i => (
               <Ionicons key={i} name={i <= 4 ? 'star' : 'star-half'} size={16} color="#f5a623" />
             ))}
-            <Text style={s.ratingText}>75 відгуків</Text>
+            <Text style={s.ratingText}>75 отзывов</Text>
           </View>
+
           <View style={s.priceRow}>
             <Text style={s.priceMain}>{offer?.priceAmount} ₴</Text>
             {offer?.oldPriceAmount ? (
               <Text style={s.priceOld}>{offer.oldPriceAmount} ₴</Text>
             ) : null}
           </View>
+
           <View style={s.actionsRow}>
             <TouchableOpacity style={s.actionIcon} onPress={toggleFavorite}>
               <Ionicons
@@ -234,42 +214,56 @@ export default function ProductDetailScreen() {
               <Ionicons name="git-compare-outline" size={26} color="#888" />
             </TouchableOpacity>
           </View>
+
           <View style={s.deliveryRow}>
-            <Ionicons name="cube-outline" size={18} color="#98be2a" />
-            <Text style={s.deliveryText}>Самовивіз з наших магазинів — Безкоштовно</Text>
+            <Ionicons name="cube-outline" size={18} color="rgba(255, 248, 76, 0.3)" />
+            <Text style={s.deliveryText}>Самовывоз из наших магазинов — Бесплатно</Text>
           </View>
         </View>
 
         <View style={s.btnRow}>
           <TouchableOpacity style={s.btnOrder}>
-            <Text style={s.btnOrderText}>Оформити замовлення</Text>
+            <Text style={s.btnOrderText}>Оформить заказ</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.btnCart} onPress={handleAddToCart}>
             <Ionicons name="cart-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-            <Text style={s.btnCartText}>Додати до кошика</Text>
+            <Text style={s.btnCartText}>Добавить в корзину</Text>
           </TouchableOpacity>
         </View>
 
         <View style={s.accordions}>
-          <AccordionSection title="Опис товару">
-            <Text style={s.accordionText}>{item.description || 'Опис відсутній.'}</Text>
+          <AccordionSection title="Описание товара">
+            <Text style={s.accordionText}>{item.description || 'Описание отсутствует.'}</Text>
           </AccordionSection>
-          <AccordionSection title="Відгуки" badge={0}>
-            <Text style={s.accordionText}>Відгуків ще немає.</Text>
+
+          <AccordionSection title="Отзывы" badge={0}>
+            <Text style={s.accordionText}>Отзывов пока нет.</Text>
           </AccordionSection>
-          <AccordionSection title="Питання" badge={0}>
-            <Text style={s.accordionText}>Питань ще немає.</Text>
+
+          <AccordionSection title="Вопросы" badge={0}>
+            <Text style={s.accordionText}>Вопросов пока нет.</Text>
           </AccordionSection>
-          <AccordionSection title="Характеристики">
-            <Text style={s.accordionText}>Характеристики відсутні.</Text>
+
+          <AccordionSection title="Характеристики" badge={attributes.length || null}>
+            {attributes.length === 0 ? (
+              <Text style={s.accordionText}>Характеристики отсутствуют.</Text>
+            ) : (
+              attributes.map((attr, i) => (
+                <View key={i} style={s.attrRow}>
+                  <Text style={s.attrName}>{attr.name ?? attr.attributeName}</Text>
+                  <Text style={s.attrValue}>{attr.value ?? attr.optionValue ?? '—'}</Text>
+                </View>
+              ))
+            )}
           </AccordionSection>
+
           <AccordionSection title="Доставка">
-            <Text style={s.accordionText}>Інформація про доставку відсутня.</Text>
+            <Text style={s.accordionText}>Информация о доставке отсутствует.</Text>
           </AccordionSection>
         </View>
 
         <TouchableOpacity style={s.supportBtn}>
-          <Text style={s.supportBtnText}>Служба підтримки</Text>
+          <Text style={s.supportBtnText}>Служба поддержки</Text>
         </TouchableOpacity>
       </ScrollView>
     </Animated.View>
@@ -277,7 +271,7 @@ export default function ProductDetailScreen() {
 }
 
 const s = StyleSheet.create({
-  header: { backgroundColor: '#00133d', flexDirection: 'row', alignItems: 'center', paddingTop: 48, paddingBottom: 12, paddingHorizontal: 12, gap: 8 },
+  header: { backgroundColor: '#00133d', flexDirection: 'row', alignItems: 'center', paddingTop: 52, paddingBottom: 14, paddingHorizontal: 16, gap: 8 },
   backBtn: { padding: 4 },
   headerTitle: { flex: 1, fontFamily: 'Montserrat_500Medium', fontSize: 14, color: '#fff' },
   iconBtn: { padding: 4 },
@@ -306,6 +300,9 @@ const s = StyleSheet.create({
   btnCartText: { color: '#fff', fontFamily: 'Montserrat_700Bold', fontSize: 13 },
   accordions: { marginTop: 12, borderTopWidth: 1, borderTopColor: '#eee' },
   accordionText: { fontFamily: 'Montserrat_400Regular', fontSize: 13, color: '#444', lineHeight: 20, marginBottom: 4 },
+  attrRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' },
+  attrName: { fontFamily: 'Montserrat_400Regular', fontSize: 13, color: '#888', flex: 1 },
+  attrValue: { fontFamily: 'Montserrat_500Medium', fontSize: 13, color: '#222', flex: 1, textAlign: 'right' },
   supportBtn: { width: 258, height: 36, borderRadius: 41, backgroundColor: '#98be2a', alignSelf: 'center', justifyContent: 'center', alignItems: 'center', marginTop: 24, marginBottom: 32 },
   supportBtnText: { fontFamily: 'Montserrat_500Medium', fontSize: 14, color: '#fff' },
 });

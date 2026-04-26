@@ -12,20 +12,14 @@ import {
   Montserrat_600SemiBold,
   Montserrat_700Bold,
 } from '@expo-google-fonts/montserrat';
-import { getWishlistItems, removeFromWishlist, createWishlistTable } from '../../db/wishlist';
-import { addToCart, createCartTable } from '../../db/cart';
+import {
+  getFavorites,
+  removeFromFavorites,
+  getProductOffers,
+  addToCart as apiAddToCart,
+} from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-
-const images = {
-  'phone0.png': require('../../assets/images/phone0.png'),
-  'phone1.png': require('../../assets/images/phone1.png'),
-  'phone2.png': require('../../assets/images/phone2.png'),
-  'phone3.png': require('../../assets/images/phone3.png'),
-  'phone4.png': require('../../assets/images/phone4.png'),
-  'phone5.png': require('../../assets/images/phone5.png'),
-  'laptop0.png': require('../../assets/images/laptop0.png'),
-  'laptop1.png': require('../../assets/images/laptop1.png'),
-};
+import { getProductImage } from '../../utils/productImages';
 
 export default function WishlistScreen() {
   const router = useRouter();
@@ -39,41 +33,61 @@ export default function WishlistScreen() {
     Montserrat_700Bold,
   });
 
+  const loadWishlist = useCallback(async () => {
+    if (!user) { setItems([]); return; }
+    try {
+      const res = await getFavorites();
+      const raw = res.data?.items || res.data || [];
+      setItems(
+        Array.isArray(raw)
+          ? raw.map(i => ({
+              id: i.id || i.productId,
+              product_id: i.productId || i.id,
+              name: i.productName || i.name || '',
+              price: i.priceAmount ?? i.price ?? 0,
+              old_price: i.oldPriceAmount ?? i.oldPrice ?? null,
+            }))
+          : []
+      );
+    } catch {
+      setItems([]);
+    }
+  }, [user]);
+
   useFocusEffect(
     useCallback(() => {
-      createWishlistTable();
-      createCartTable();
-      if (user?.id) setItems(getWishlistItems(user.id));
-      else setItems([]);
-    }, [user])
+      loadWishlist();
+    }, [user, loadWishlist])
   );
 
-  const handleRemove = (productId, productType, name) => {
-    Alert.alert('Видалити', `Видалити "${name}" з обраного?`, [
-      { text: 'Скасувати', style: 'cancel' },
+  const handleRemove = (productId, name) => {
+    Alert.alert('Удалить', `Удалить "${name}" из избранного?`, [
+      { text: 'Отмена', style: 'cancel' },
       {
-        text: 'Видалити', style: 'destructive',
-        onPress: () => {
-          removeFromWishlist(user.id, productId, productType);
-          setItems(getWishlistItems(user.id));
+        text: 'Удалить', style: 'destructive',
+        onPress: async () => {
+          try { await removeFromFavorites(productId); } catch {}
+          loadWishlist();
         },
       },
     ]);
   };
 
-  const handleAddToCart = (item) => {
+  const handleAddToCart = async (item) => {
     if (!user) return;
-    const result = addToCart(user.id, {
-      id: item.product_id,
-      name: item.name,
-      price: item.price,
-      image: item.image,
-    }, item.product_type);
-    if (result.success) {
-      Alert.alert('Додано!', `"${item.name}" додано до кошика.`, [
+    try {
+      const offersRes = await getProductOffers(item.product_id);
+      const offers = offersRes.data || [];
+      const offer = Array.isArray(offers) ? offers[0] : offers;
+      const offerId = offer?.id || offer?.offerId;
+      if (!offerId) throw new Error('no offer');
+      await apiAddToCart({ offerId, quantity: 1 });
+      Alert.alert('Добавлено!', `"${item.name}" добавлено в корзину.`, [
         { text: 'OK', style: 'cancel' },
-        { text: 'Перейти до кошика', onPress: () => router.push('/(tabs)/cart') },
+        { text: 'Перейти в корзину', onPress: () => router.push('/(tabs)/cart') },
       ]);
+    } catch {
+      Alert.alert('Ошибка', 'Не удалось добавить в корзину');
     }
   };
 
@@ -81,31 +95,27 @@ export default function WishlistScreen() {
 
   return (
     <View style={s.container}>
+
       <View style={s.header}>
-        <Text style={s.headerTitle}>Обране</Text>
-        {items.length > 0 && (
-          <View style={s.countBadge}>
-            <Text style={s.countBadgeText}>{items.length}</Text>
-          </View>
-        )}
+        <Text style={s.headerTitle}>Избранное</Text>
       </View>
 
       {!user ? (
         <View style={s.emptyContainer}>
           <Ionicons name="person-outline" size={64} color="#ccc" />
-          <Text style={s.emptyTitle}>Увійдіть в акаунт</Text>
-          <Text style={s.emptySubtext}>Щоб переглянути обране</Text>
+          <Text style={s.emptyTitle}>Войдите в аккаунт</Text>
+          <Text style={s.emptySubtext}>Чтобы просмотреть избранное</Text>
           <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/(tabs)/login')}>
-            <Text style={s.actionBtnText}>Увійти</Text>
+            <Text style={s.actionBtnText}>Войти</Text>
           </TouchableOpacity>
         </View>
       ) : items.length === 0 ? (
         <View style={s.emptyContainer}>
           <Ionicons name="heart-outline" size={64} color="#ccc" />
-          <Text style={s.emptyTitle}>Список обраного порожній</Text>
-          <Text style={s.emptySubtext}>Додавайте товари натискаючи ♡</Text>
+          <Text style={s.emptyTitle}>Список избранного пуст</Text>
+          <Text style={s.emptySubtext}>Добавляйте товары, нажимая ♡</Text>
           <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/(tabs)/')}>
-            <Text style={s.actionBtnText}>Перейти на головну</Text>
+            <Text style={s.actionBtnText}>Перейти на главную</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -113,24 +123,22 @@ export default function WishlistScreen() {
           <View style={s.grid}>
             {items.map(item => (
               <View key={item.id} style={s.card}>
-                {/* Сердечко — убрать из вішліста */}
                 <TouchableOpacity
                   style={s.heartBtn}
-                  onPress={() => handleRemove(item.product_id, item.product_type, item.name)}
+                  onPress={() => handleRemove(item.product_id, item.name)}
                 >
                   <Ionicons name="heart" size={20} color="#ff0008" />
                 </TouchableOpacity>
 
-                {/* Фото */}
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={() => router.push({
                     pathname: '/(tabs)/ProductDetailScreen',
-                    params: { id: item.product_id, type: item.product_type },
+                    params: { id: item.product_id, type: 'api' },
                   })}
                 >
                   <Image
-                    source={images[item.image] || images['phone0.png']}
+                    source={getProductImage(item.name)}
                     style={s.cardImg}
                     resizeMode="contain"
                   />
@@ -141,12 +149,12 @@ export default function WishlistScreen() {
                 {item.old_price ? (
                   <Text style={s.oldPrice}>{item.old_price?.toLocaleString('uk-UA')} ₴</Text>
                 ) : null}
+
                 <Text style={s.price}>{item.price?.toLocaleString('uk-UA')} ₴</Text>
 
-                {/* Кнопка в кошик */}
                 <TouchableOpacity style={s.cartBtn} onPress={() => handleAddToCart(item)}>
                   <Ionicons name="cart-outline" size={15} color="#fff" style={{ marginRight: 4 }} />
-                  <Text style={s.cartBtnText}>До кошика</Text>
+                  <Text style={s.cartBtnText}>В корзину</Text>
                 </TouchableOpacity>
               </View>
             ))}
@@ -161,18 +169,11 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: {
     backgroundColor: '#00133d',
-    paddingTop: 52, paddingBottom: 16, paddingHorizontal: 16,
+    paddingTop: 52, paddingBottom: 14, paddingHorizontal: 16,
     flexDirection: 'row', alignItems: 'center', gap: 10,
   },
   headerTitle: {
     fontFamily: 'Montserrat_700Bold', fontSize: 20, color: '#fff', flex: 1,
-  },
-  countBadge: {
-    backgroundColor: '#a3ff00', borderRadius: 12,
-    paddingHorizontal: 10, paddingVertical: 3,
-  },
-  countBadgeText: {
-    fontFamily: 'Montserrat_700Bold', fontSize: 13, color: '#00133d',
   },
   emptyContainer: {
     flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 60,
@@ -192,14 +193,11 @@ const s = StyleSheet.create({
   actionBtnText: {
     fontFamily: 'Montserrat_600SemiBold', fontSize: 14, color: '#fff',
   },
-  grid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 12,
-  },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   card: {
     backgroundColor: '#fff', borderRadius: 12, padding: 12,
     width: '47.5%', alignItems: 'center', position: 'relative',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07, shadowRadius: 4, elevation: 2,
+    borderWidth: 0.5, borderColor: 'rgba(166,165,165,1)',
   },
   heartBtn: { position: 'absolute', top: 10, right: 10, zIndex: 1 },
   cardImg: { width: 110, height: 110, marginTop: 16, marginBottom: 8 },
@@ -212,7 +210,7 @@ const s = StyleSheet.create({
     color: '#aaa', textDecorationLine: 'line-through', marginBottom: 2,
   },
   price: {
-    fontFamily: 'Montserrat_700Bold', fontSize: 14,
+    fontFamily: 'Montserrat_400Regular', fontSize: 15,
     color: '#ff0008', marginBottom: 10,
   },
   cartBtn: {

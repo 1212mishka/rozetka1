@@ -8,66 +8,14 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   useFonts,
   Montserrat_400Regular,
-  Montserrat_500Medium,
   Montserrat_700Bold,
   Montserrat_600SemiBold,
 } from '@expo-google-fonts/montserrat';
-import { getProducts } from '../../api';
+import { getProducts } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { addToWishlist, removeFromWishlist, getWishlistItems, createWishlistTable } from '../../db/wishlist';
 import { addToCart, createCartTable } from '../../db/cart';
-
-const namedImages = {
-  'Apple iPhone 13': require('../../assets/images/phone0.png'),
-  'Samsung Galaxy S23': require('../../assets/images/phone1.png'),
-  'Xiaomi Redmi Note 12': require('../../assets/images/phone2.png'),
-  'Realme 11 Pro': require('../../assets/images/phone3.png'),
-  'Google Pixel 7a': require('../../assets/images/phone4.png'),
-  'OnePlus Nord CE 3': require('../../assets/images/phone5.png'),
-  'Apple MacBook Air M2': require('../../assets/images/laptop0.png'),
-  'ASUS ZenBook 14': require('../../assets/images/laptop1.png'),
-};
-
-const laptopPool = [
-  require('../../assets/images/laptop0.png'),
-  require('../../assets/images/laptop1.png'),
-];
-const phonePool = [
-  require('../../assets/images/phone0.png'),
-  require('../../assets/images/phone1.png'),
-  require('../../assets/images/phone2.png'),
-  require('../../assets/images/phone3.png'),
-  require('../../assets/images/phone4.png'),
-  require('../../assets/images/phone5.png'),
-];
-
-const isLaptopName = (name = '') => {
-  const l = name.toLowerCase();
-  return l.includes('ноутбук') || l.includes('macbook') || l.includes('laptop') ||
-    l.includes('zenbook') || l.includes('thinkpad') || l.includes('vivobook') ||
-    l.includes('probook') || l.includes('elitebook') || l.includes('swift');
-};
-const isPhoneName = (name = '') => {
-  const l = name.toLowerCase();
-  return l.includes('iphone') || l.includes('samsung') || l.includes('xiaomi') ||
-    l.includes('realme') || l.includes('pixel') || l.includes('oneplus') ||
-    l.includes('смартфон') || l.includes('phone');
-};
-
-const getProductImage = (name = '') => {
-  if (namedImages[name]) return namedImages[name];
-  if (isLaptopName(name)) return laptopPool[name.length % laptopPool.length];
-  if (isPhoneName(name)) return phonePool[name.length % phonePool.length];
-  return null;
-};
-
-const getProductImageFile = (name = '') => {
-  const laptopFiles = ['laptop0.png', 'laptop1.png'];
-  const phoneFiles = ['phone0.png', 'phone1.png', 'phone2.png', 'phone3.png', 'phone4.png', 'phone5.png'];
-  if (isLaptopName(name)) return laptopFiles[name.length % 2];
-  if (isPhoneName(name)) return phoneFiles[name.length % 6];
-  return 'phone0.png';
-};
+import { getProductImage, getProductImageFile } from '../../utils/productImages';
 
 export default function ProductsScreen() {
   const { categoryId, categoryName } = useLocalSearchParams();
@@ -80,7 +28,6 @@ export default function ProductsScreen() {
 
   const [fontsLoaded] = useFonts({
     Montserrat_400Regular,
-    Montserrat_500Medium,
     Montserrat_700Bold,
     Montserrat_600SemiBold,
   });
@@ -91,8 +38,8 @@ export default function ProductsScreen() {
       try {
         const response = await getProducts(categoryId);
         setProducts(response.data);
-      } catch (e) {
-        console.error('Помилка завантаження товарів:', e);
+      } catch {
+        // ошибка загрузки — оставляем пустой список
       } finally {
         setLoading(false);
       }
@@ -164,7 +111,7 @@ export default function ProductsScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>{categoryName || 'Товари'}</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>{categoryName || 'Товары'}</Text>
           <TouchableOpacity style={styles.cartBtn} onPress={() => router.push('/(tabs)/cart')}>
             <Ionicons name="cart-outline" size={26} color="#fff" />
           </TouchableOpacity>
@@ -173,7 +120,7 @@ export default function ProductsScreen() {
           <Ionicons name="search-outline" size={16} color="#aaa" style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Я шукаю..."
+            placeholder="Я ищу..."
             placeholderTextColor="#aaa"
             value={search}
             onChangeText={setSearch}
@@ -185,11 +132,11 @@ export default function ProductsScreen() {
       <View style={styles.filterBar}>
         <TouchableOpacity style={styles.filterBtn}>
           <Ionicons name="swap-vertical-outline" size={14} color="#333" style={{ marginRight: 4 }} />
-          <Text style={styles.filterBtnText}>Сортування</Text>
+          <Text style={styles.filterBtnText}>Сортировка</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.filterBtn}>
           <Ionicons name="options-outline" size={14} color="#333" style={{ marginRight: 4 }} />
-          <Text style={styles.filterBtnText}>Фільтр</Text>
+          <Text style={styles.filterBtnText}>Фильтр</Text>
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
         <TouchableOpacity style={styles.iconBtn}>
@@ -208,7 +155,7 @@ export default function ProductsScreen() {
       ) : filtered.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="cube-outline" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>Товарів не знайдено</Text>
+          <Text style={styles.emptyText}>Товары не найдены</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.grid}>
@@ -219,7 +166,7 @@ export default function ProductsScreen() {
               activeOpacity={0.85}
               onPress={() => router.push({ pathname: '/(tabs)/ProductDetailScreen', params: { id: product.id, type: 'api' } })}
             >
-              {/* Heart */}
+              {/* Избранное */}
               <TouchableOpacity
                 style={styles.heartBtn}
                 onPress={() => toggleWishlist(product)}
@@ -232,20 +179,20 @@ export default function ProductsScreen() {
                 />
               </TouchableOpacity>
 
-              {/* Image */}
+              {/* Изображение */}
               {getProductImage(product.name) ? (
                 <Image source={getProductImage(product.name)} style={styles.cardImg} resizeMode="contain" />
               ) : (
                 <View style={styles.noPhoto}>
                   <Ionicons name="image-outline" size={36} color="#ccc" />
-                  <Text style={styles.noPhotoText}>Фото відсутнє</Text>
+                  <Text style={styles.noPhotoText}>Фото отсутствует</Text>
                 </View>
               )}
 
-              {/* Name */}
+              {/* Название */}
               <Text style={styles.cardName} numberOfLines={2}>{product.name}</Text>
 
-              {/* Prices */}
+              {/* Цены */}
               <View style={styles.priceBlock}>
                 <View style={{ flex: 1 }}>
                   {product.offer?.oldPriceAmount ? (
@@ -253,7 +200,7 @@ export default function ProductsScreen() {
                   ) : null}
                   <Text style={styles.price}>{product.offer?.priceAmount} ₴</Text>
                 </View>
-                {/* Cart button */}
+                {/* Кнопка корзины */}
                 <TouchableOpacity
                   style={styles.cartMiniBtn}
                   onPress={() => handleAddToCart(product)}
@@ -381,14 +328,14 @@ const styles = StyleSheet.create({
   },
   oldPrice: {
     fontFamily: 'Montserrat_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: '#aaa',
     textDecorationLine: 'line-through',
-    marginBottom: 1,
+    marginBottom: 2,
   },
   price: {
-    fontFamily: 'Montserrat_700Bold',
-    fontSize: 14,
+    fontFamily: 'Montserrat_400Regular',
+    fontSize: 15,
     color: '#ff0008',
   },
   cartMiniBtn: {

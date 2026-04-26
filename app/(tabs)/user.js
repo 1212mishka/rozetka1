@@ -1,7 +1,5 @@
-export function getUsers() {
-  return db.getAllSync('SELECT * FROM users');
-}
+import { View } from 'react-native';
 
-export function deleteUser(id) {
-  db.execSync(`DELETE FROM users WHERE id = ${id};`);
+export default function UserScreen() {
+  return <View />;
 }
